@@ -38,13 +38,15 @@ intents.members = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
+bot.remove_command("help")
 
 # =========================
-# VARS
+# GLOBALS
 # =========================
 raid_mode = False
 spam_cache = {}
 active_tickets = {}
+ticket_sent = False
 
 # =========================
 # UTILS
@@ -74,25 +76,33 @@ def save_warns(data):
         pass
 
 # =========================
-# READY
+# READY (FIXED)
 # =========================
 @bot.event
 async def on_ready():
+    global ticket_sent
+
     print(f"🔴 UNITY ONLINE: {bot.user}")
 
     try:
         await bot.tree.sync()
 
-        channel = bot.get_channel(TICKET_PANEL_CHANNEL_ID)
-        if channel:
-            embed = discord.Embed(
-                title="🎫 UNITY TICKET SYSTEM",
-                description="Clicca il bottone per aprire un ticket",
-                color=discord.Color.red()
-            )
-            embed.set_image(url=BANNER)
+        if not ticket_sent:
+            channel = bot.get_channel(TICKET_PANEL_CHANNEL_ID)
 
-            await channel.send(embed=embed, view=TicketView())
+            if channel:
+                embed = discord.Embed(
+                    title="🎫 UNITY TICKET SYSTEM",
+                    description="Clicca il bottone per aprire un ticket",
+                    color=discord.Color.red()
+                )
+                embed.set_image(url=BANNER)
+
+                await channel.send(embed=embed, view=TicketView())
+
+                print("✔ Ticket panel inviato")
+
+            ticket_sent = True
 
     except Exception as e:
         print("READY ERROR:", e)
@@ -103,10 +113,6 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     try:
-        if raid_mode:
-            await member.kick(reason="ANTI RAID")
-            return
-
         await log(member.guild, f"🟢 JOIN {member}")
 
         channel = bot.get_channel(WELCOME_CHANNEL_ID)
@@ -162,16 +168,6 @@ class VerifyView(discord.ui.View):
         await interaction.user.add_roles(role)
         await interaction.response.send_message("✔ verificato", ephemeral=True)
 
-@bot.tree.command(name="verifypanel")
-async def verifypanel(interaction):
-    embed = discord.Embed(
-        title="🔐 VERIFY",
-        color=discord.Color.red()
-    )
-    embed.set_image(url=BANNER)
-
-    await interaction.response.send_message(embed=embed, view=VerifyView())
-
 # =========================
 # ANNUNCI
 # =========================
@@ -210,7 +206,7 @@ async def clear(interaction, amount: int):
     await interaction.response.send_message("🧹 pulito", ephemeral=True)
 
 # =========================
-# WARN
+# WARN SYSTEM
 # =========================
 @bot.tree.command(name="warn")
 async def warn(interaction, member: discord.Member, reason: str):
