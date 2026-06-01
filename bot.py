@@ -12,7 +12,7 @@ load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 if not TOKEN:
-    raise ValueError("DISCORD_TOKEN mancante (controlla le VARIABLES dell'hosting)")
+    raise ValueError("DISCORD_TOKEN mancante")
 
 # =========================
 # CONFIG
@@ -25,12 +25,13 @@ LOG_CHANNEL = "📋・logs"
 
 WELCOME_CHANNEL_ID = 1510308783581171952
 GOODBYE_CHANNEL_ID = 1510313831694340096
+TICKET_PANEL_CHANNEL_ID = 1510605951248633946
 
 MEMBER_ROLE = "Membro"
 WARN_FILE = "warns.json"
 
 # =========================
-# INTENTS (OBBLIGATORI)
+# BOT INTENTS
 # =========================
 intents = discord.Intents.default()
 intents.members = True
@@ -38,11 +39,15 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# =========================
+# VARS
+# =========================
 raid_mode = False
 spam_cache = {}
+active_tickets = {}
 
 # =========================
-# SAFE UTILS
+# UTILS
 # =========================
 async def log(guild, text):
     try:
@@ -74,18 +79,29 @@ def save_warns(data):
 @bot.event
 async def on_ready():
     print(f"🔴 UNITY ONLINE: {bot.user}")
+
     try:
         await bot.tree.sync()
+
+        channel = bot.get_channel(TICKET_PANEL_CHANNEL_ID)
+        if channel:
+            embed = discord.Embed(
+                title="🎫 UNITY TICKET SYSTEM",
+                description="Clicca il bottone per aprire un ticket",
+                color=discord.Color.red()
+            )
+            embed.set_image(url=BANNER)
+
+            await channel.send(embed=embed, view=TicketView())
+
     except Exception as e:
-        print("SYNC ERROR:", e)
+        print("READY ERROR:", e)
 
 # =========================
-# WELCOME / GOODBYE (FIXED SAFE)
+# WELCOME / GOODBYE
 # =========================
 @bot.event
 async def on_member_join(member):
-    global raid_mode
-
     try:
         if raid_mode:
             await member.kick(reason="ANTI RAID")
@@ -93,8 +109,7 @@ async def on_member_join(member):
 
         await log(member.guild, f"🟢 JOIN {member}")
 
-        channel = member.guild.get_channel(WELCOME_CHANNEL_ID)
-
+        channel = bot.get_channel(WELCOME_CHANNEL_ID)
         if channel:
             embed = discord.Embed(
                 title="🔴 UNITY",
@@ -104,8 +119,8 @@ async def on_member_join(member):
             embed.set_image(url=BANNER)
             await channel.send(embed=embed)
 
-    except Exception as e:
-        print("JOIN ERROR:", e)
+    except:
+        pass
 
 
 @bot.event
@@ -113,29 +128,28 @@ async def on_member_remove(member):
     try:
         await log(member.guild, f"🔴 LEAVE {member}")
 
-        channel = member.guild.get_channel(GOODBYE_CHANNEL_ID)
-
+        channel = bot.get_channel(GOODBYE_CHANNEL_ID)
         if channel:
             embed = discord.Embed(
                 title="🔴 GOODBYE",
-                description=f"{member} ha lasciato il server",
+                description=f"{member}",
                 color=discord.Color.red()
             )
             embed.set_image(url=BANNER)
             await channel.send(embed=embed)
 
-    except Exception as e:
-        print("LEAVE ERROR:", e)
+    except:
+        pass
 
 # =========================
-# VERIFY SYSTEM
+# VERIFY
 # =========================
 class VerifyView(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
     @discord.ui.button(label="Verifica", emoji="🔐", style=discord.ButtonStyle.danger)
-    async def verify(self, interaction: discord.Interaction, button: discord.ui.Button):
+    async def verify(self, interaction, button):
 
         role = discord.utils.get(interaction.guild.roles, name=MEMBER_ROLE)
 
@@ -145,17 +159,13 @@ class VerifyView(discord.ui.View):
         if role in interaction.user.roles:
             return await interaction.response.send_message("⚠️ già verificato", ephemeral=True)
 
-        try:
-            await interaction.user.add_roles(role)
-            await interaction.response.send_message("✔ verificato", ephemeral=True)
-        except:
-            await interaction.response.send_message("❌ errore ruolo", ephemeral=True)
+        await interaction.user.add_roles(role)
+        await interaction.response.send_message("✔ verificato", ephemeral=True)
 
 @bot.tree.command(name="verifypanel")
-async def verifypanel(interaction: discord.Interaction):
-
+async def verifypanel(interaction):
     embed = discord.Embed(
-        title="🔐 UNITY VERIFY",
+        title="🔐 VERIFY",
         color=discord.Color.red()
     )
     embed.set_image(url=BANNER)
@@ -166,7 +176,7 @@ async def verifypanel(interaction: discord.Interaction):
 # ANNUNCI
 # =========================
 @bot.tree.command(name="annunci")
-async def annunci(interaction: discord.Interaction, titolo: str, messaggio: str):
+async def annunci(interaction, titolo: str, messaggio: str):
 
     if not interaction.user.guild_permissions.administrator:
         return await interaction.response.send_message("❌ no permessi", ephemeral=True)
@@ -185,31 +195,22 @@ async def annunci(interaction: discord.Interaction, titolo: str, messaggio: str)
 # MODERAZIONE
 # =========================
 @bot.tree.command(name="ban")
-async def ban(interaction, member: discord.Member, reason: str = "no reason"):
-    try:
-        await member.ban(reason=reason)
-        await interaction.response.send_message("🔨 bannato", ephemeral=True)
-    except:
-        await interaction.response.send_message("❌ errore ban", ephemeral=True)
+async def ban(interaction, member: discord.Member, reason="no reason"):
+    await member.ban(reason=reason)
+    await interaction.response.send_message("🔨 bannato", ephemeral=True)
 
 @bot.tree.command(name="kick")
-async def kick(interaction, member: discord.Member, reason: str = "no reason"):
-    try:
-        await member.kick(reason=reason)
-        await interaction.response.send_message("👢 kickato", ephemeral=True)
-    except:
-        await interaction.response.send_message("❌ errore kick", ephemeral=True)
+async def kick(interaction, member: discord.Member, reason="no reason"):
+    await member.kick(reason=reason)
+    await interaction.response.send_message("👢 kickato", ephemeral=True)
 
 @bot.tree.command(name="clear")
 async def clear(interaction, amount: int):
-    try:
-        await interaction.channel.purge(limit=amount)
-        await interaction.response.send_message("🧹 pulito", ephemeral=True)
-    except:
-        await interaction.response.send_message("❌ errore clear", ephemeral=True)
+    await interaction.channel.purge(limit=amount)
+    await interaction.response.send_message("🧹 pulito", ephemeral=True)
 
 # =========================
-# WARN SYSTEM
+# WARN
 # =========================
 @bot.tree.command(name="warn")
 async def warn(interaction, member: discord.Member, reason: str):
@@ -229,7 +230,7 @@ async def warns(interaction, member: discord.Member):
     await interaction.response.send_message("\n".join(warns) if warns else "nessun warn", ephemeral=True)
 
 # =========================
-# ANTI SPAM (SAFE)
+# ANTI SPAM
 # =========================
 @bot.event
 async def on_message(message):
@@ -262,7 +263,7 @@ async def raid(interaction):
     await interaction.response.send_message(f"🚨 raid: {raid_mode}", ephemeral=True)
 
 # =========================
-# TICKET SYSTEM (FIXED STABLE)
+# TICKET SYSTEM
 # =========================
 class TicketView(discord.ui.View):
 
@@ -271,6 +272,9 @@ class TicketView(discord.ui.View):
 
         guild = interaction.guild
         user = interaction.user
+
+        if user.id in active_tickets:
+            return await interaction.response.send_message("❌ hai già un ticket", ephemeral=True)
 
         category = discord.utils.get(guild.categories, name=TICKET_CATEGORY)
         if not category:
@@ -288,8 +292,10 @@ class TicketView(discord.ui.View):
         if staff:
             await channel.set_permissions(staff, view_channel=True, send_messages=True)
 
+        active_tickets[user.id] = channel.id
+
         embed = discord.Embed(
-            title="🎫 UNITY TICKET",
+            title="🎫 TICKET",
             description=f"{user.mention}",
             color=discord.Color.red()
         )
@@ -320,6 +326,11 @@ class TicketControl(discord.ui.View):
 
     @discord.ui.button(label="Chiudi", emoji="🔒", style=discord.ButtonStyle.danger)
     async def close(self, interaction, button):
+
+        for uid, cid in list(active_tickets.items()):
+            if cid == interaction.channel.id:
+                del active_tickets[uid]
+
         await interaction.channel.delete()
 
 # =========================
@@ -340,7 +351,7 @@ async def dashboard(interaction):
         return await interaction.response.send_message("❌ no permessi", ephemeral=True)
 
     embed = discord.Embed(
-        title="⚙️ UNITY DASHBOARD",
+        title="⚙️ DASHBOARD",
         color=discord.Color.red()
     )
     embed.set_image(url=BANNER)
