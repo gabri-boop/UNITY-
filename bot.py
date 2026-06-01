@@ -63,33 +63,54 @@ async def on_ready():
     await bot.tree.sync()
 
 # =========================
-# WELCOME / GOODBYE
+# WELCOME / GOODBYE FIXED
 # =========================
 @bot.event
 async def on_member_join(member):
 
     global raid_mode
 
+    # ANTI RAID
     if raid_mode:
-        await member.kick(reason="ANTI RAID")
+        try:
+            await member.kick(reason="ANTI RAID")
+        except:
+            pass
         return
 
+    # LOG JOIN
     await log(member.guild, f"🟢 JOIN {member}")
 
-    channel = discord.utils.get(member.guild.text_channels, name="👋・welcome")
+    # WELCOME CHANNEL
+    welcome = discord.utils.get(member.guild.text_channels, name="👋・welcome")
 
-    if channel:
+    if welcome:
         embed = discord.Embed(
             title="🔴 UNITY",
             description=f"Benvenuto {member.mention}",
             color=discord.Color.red()
         )
         embed.set_image(url=BANNER)
-        await channel.send(embed=embed)
+        await welcome.send(embed=embed)
+
 
 @bot.event
 async def on_member_remove(member):
+
+    # LOG LEAVE
     await log(member.guild, f"🔴 LEAVE {member}")
+
+    # GOODBYE CHANNEL
+    goodbye = discord.utils.get(member.guild.text_channels, name="💔・goodbye")
+
+    if goodbye:
+        embed = discord.Embed(
+            title="🔴 ADDIO",
+            description=f"{member} ha lasciato il server",
+            color=discord.Color.red()
+        )
+        embed.set_image(url=BANNER)
+        await goodbye.send(embed=embed)
 
 # =========================
 # VERIFY
